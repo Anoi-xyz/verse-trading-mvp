@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Verse — Trade</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.2/ethers.umd.min.js"></script>
+<style>
+  :root {
+    --ink: #0B1220; --panel: #131B2E; --panel-2: #0F1728; --line: #263252;
+    --paper: #E8ECF4; --muted: #7C89A8; --faint: #4A5675;
+    --pass: #4ADE80; --pass-dim: #14301F; --fail: #F87171; --fail-dim: #331616;
+    --pending: #FBBF24; --pending-dim: #332A10; --live: #38BDF8;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--ink); color: var(--paper); font-family: 'Space Grotesk', sans-serif; -webkit-font-smoothing: antialiased; }
+  .mono { font-family: 'IBM Plex Mono', monospace; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 40px 32px 96px; }
+
+  header.top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 32px; gap: 24px; flex-wrap: wrap; }
+  .brand-mark { display: flex; align-items: baseline; gap: 12px; }
+  .brand-mark h1 { font-size: 24px; font-weight: 600; margin: 0; letter-spacing: -0.02em; }
+  .brand-mark span.tick { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--muted); }
+
+  .connect-btn {
+    font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 500;
+    background: var(--live); color: var(--ink); border: none; padding: 10px 18px;
+    border-radius: 8px; cursor: pointer;
+  }
+  .connect-btn:hover { opacity: 0.9; }
+  .wallet-chip {
+    display: inline-flex; align-items: center; gap: 8px; font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px; padding: 9px 14px; border-radius: 100px; border: 1px solid var(--line); color: var(--pass);
+  }
+  .wallet-chip .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--pass); }
+
+  .net-warning {
+    display: none; background: var(--fail-dim); border: 1px solid var(--fail); color: var(--fail);
+    padding: 10px 16px; border-radius: 8px; font-size: 13px; margin-bottom: 20px; align-items: center; justify-content: space-between;
+  }
+  .net-warning button { font-family: 'IBM Plex Mono', monospace; font-size: 12px; background: var(--fail); color: var(--ink); border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; }
+
+  .trade-panel {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+    padding: 28px; max-width: 480px; margin: 0 auto 48px;
+  }
+  .trade-tabs { display: flex; gap: 4px; background: var(--panel-2); border-radius: 10px; padding: 4px; margin-bottom: 20px; }
+  .trade-tab {
+    flex: 1; text-align: center; padding: 10px; border-radius: 8px; font-size: 14px; font-weight: 500;
+    cursor: pointer; color: var(--muted); border: none; background: transparent; font-family: 'Space Grotesk', sans-serif;
+  }
+  .trade-tab.active { background: var(--panel); color: var(--paper); }
+  .trade-tab.buy.active { color: var(--pass); }
+  .trade-tab.sell.active { color: var(--fail); }
+
+  .input-box { background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 8px; }
+  .input-box .label-row { display: flex; justify-content: space-between; font-size: 12px; color: var(--faint); margin-bottom: 8px; }
+  .input-row { display: flex; align-items: center; gap: 10px; }
+  .input-row input {
+    flex: 1; background: transparent; border: none; outline: none; color: var(--paper);
+    font-family: 'IBM Plex Mono', monospace; font-size: 22px; min-width: 0;
+  }
+  .token-pill {
+    font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 500; background: var(--panel);
+    border: 1px solid var(--line); padding: 8px 12px; border-radius: 100px; white-space: nowrap;
+  }
+  .arrow-divider { display: flex; justify-content: center; margin: -4px 0; position: relative; z-index: 1; }
+  .arrow-divider .circle {
+    width: 32px; height: 32px; border-radius: 50%; background: var(--panel-2); border: 3px solid var(--panel);
+    display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 14px;
+  }
+
+  .quote-line { display: flex; justify-content: space-between; font-size: 12px; color: var(--faint); padding: 10px 4px; font-family: 'IBM Plex Mono', monospace; }
+  .quote-line span.val { color: var(--muted); }
+
+  .swap-btn {
+    width: 100%; padding: 15px; border-radius: 12px; border: none; font-size: 15px; font-weight: 600;
+    font-family: 'Space Grotesk', sans-serif; cursor: pointer; margin-top: 8px;
+  }
+  .swap-btn.buy { background: var(--pass); color: #05130B; }
+  .swap-btn.sell { background: var(--fail); color: #2A0A0A; }
+  .swap-btn:disabled { background: var(--line); color: var(--faint); cursor: not-allowed; }
+
+  .tx-status {
+    margin-top: 16px; padding: 14px; border-radius: 10px; border: 1px solid var(--line);
+    font-family: 'IBM Plex Mono', monospace; font-size: 12px; display: none;
+  }
+  .tx-status.pending { border-color: var(--pending); color: var(--pending); display: block; }
+  .tx-status.success { border-color: var(--pass); color: var(--pass); display: block; }
+  .tx-status.error { border-color: var(--fail); color: var(--fail); display: block; }
+  .tx-status a { color: inherit; }
+
+  .pool-note { font-size: 11.5px; color: var(--faint); text-align: center; margin-top: 14px; line-height: 1.6; }
+
+  section { margin-bottom: 48px; }
+  h2 { font-size: 14px; font-weight: 600; margin: 0 0 4px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  .section-sub { color: var(--muted); font-size: 13px; margin: 6px 0 20px; line-height: 1.6; max-width: 640px; }
+
+  .ledger { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .ledger-row { display: grid; grid-template-columns: 1.4fr 1.4fr 1fr 1fr 1fr; align-items: center; padding: 12px 18px; border-bottom: 1px solid var(--line); font-size: 12.5px; }
+  .ledger-row:last-child { border-bottom: none; }
+  .ledger-row.head { background: var(--panel-2); color: var(--faint); font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .ledger-row.body { background: var(--panel); }
+  .asset-cell { font-weight: 500; }
+  .asset-cell .strategy { display: block; color: var(--muted); font-size: 11px; font-family: 'IBM Plex Mono', monospace; margin-top: 2px; }
+  .num-cell { font-family: 'IBM Plex Mono', monospace; }
+  .num-cell .trades { color: var(--faint); font-size: 10.5px; margin-left: 6px; }
+  .up { color: var(--pass); } .down { color: var(--fail); } .neutral { color: var(--muted); }
+  .stamp { display: inline-flex; align-items: center; gap: 6px; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; font-weight: 500; padding: 4px 9px; border-radius: 6px; border: 1px solid; }
+  .stamp.pass { color: var(--pass); border-color: var(--pass); background: var(--pass-dim); }
+  .stamp.fail { color: var(--fail); border-color: var(--fail); background: var(--fail-dim); }
+  .stamp.insufficient { color: var(--faint); border-color: var(--faint); background: transparent; }
+  .ledger-footer { padding: 12px 18px; background: var(--panel-2); font-size: 11.5px; color: var(--muted); font-family: 'IBM Plex Mono', monospace; }
+  .ledger-footer b { color: var(--paper); }
+  @media (max-width: 720px) { .ledger-row { grid-template-columns: 1.4fr 1fr 1fr; } .ledger-row .col-out, .ledger-row .col-status { display: none; } }
+
+  .footnote { color: var(--faint); font-size: 11.5px; line-height: 1.7; max-width: 700px; margin-top: 16px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="brand-mark">
+      <h1>Verse</h1>
+      <span class="tick mono">live testnet dex</span>
+    </div>
+    <button class="connect-btn" id="connectBtn" onclick="connectWallet()">Connect Wallet</button>
+    <span class="wallet-chip" id="walletChip" style="display:none"><span class="dot"></span><span id="walletAddr"></span></span>
+  </header>
+
+  <div class="net-warning" id="netWarning">
+    <span>Wrong network — this trades on Sepolia testnet only.</span>
+    <button onclick="switchToSepolia()">Switch to Sepolia</button>
+  </div>
+
+  <div class="trade-panel">
+    <div class="trade-tabs">
+      <button class="trade-tab buy active" id="tabBuy" onclick="setMode('buy')">Buy</button>
+      <button class="trade-tab sell" id="tabSell" onclick="setMode('sell')">Sell</button>
+    </div>
+
+    <div class="input-box">
+      <div class="label-row"><span id="fromLabel">You pay</span><span id="fromBalance">Balance: —</span></div>
+      <div class="input-row">
+        <input type="number" id="amountIn" placeholder="0.0" oninput="onAmountChange()" min="0" step="any" />
+        <span class="token-pill" id="fromToken">ETH</span>
+      </div>
+    </div>
+
+    <div class="arrow-divider"><div class="circle">&#8595;</div></div>
+
+    <div class="input-box">
+      <div class="label-row"><span>You receive (estimated)</span><span id="toBalance">Balance: —</span></div>
+      <div class="input-row">
+        <input type="text" id="amountOut" placeholder="0.0" disabled />
+        <span class="token-pill" id="toToken">tUSDT</span>
+      </div>
+    </div>
+
+    <div class="quote-line"><span>Slippage tolerance</span><span class="val">5%</span></div>
+    <div class="quote-line"><span>Route</span><span class="val" id="routeLabel">ETH → tUSDT</span></div>
+
+    <button class="swap-btn buy" id="swapBtn" onclick="executeSwap()" disabled>Connect wallet to trade</button>
+
+    <div class="tx-status" id="txStatus"></div>
+
+    <p class="pool-note">Real Uniswap v2 pool on Sepolia testnet, verified on-chain against the Factory contract. No real funds — get free test ETH from the <a href="https://www.alchemy.com/faucets/ethereum-sepolia" target="_blank" style="color:var(--live)">Sepolia faucet</a>.</p>
+  </div>
+
+  <section>
+    <h2>Validation ledger</h2>
+    <p class="section-sub">Every strategy this project tested was validated on two independent halves of history before being trusted. This trading panel executes real swaps — the strategy that decides <i>when</i> to trade is a separate question, and this ledger is the honest record of what's been tested so far.</p>
+    <div class="ledger" id="ledger">
+      <div class="ledger-row head"><div>Asset / strategy</div><div>In-sample</div><div>Out-of-sample</div><div>Trades</div><div>Verdict</div></div>
+      <div id="ledger-body"></div>
+    </div>
+    <div class="ledger-footer" id="ledger-summary"></div>
+    <p class="footnote">Full write-up, architecture, and source: <a href="https://github.com/Anoi-xyz/verse-trading-mvp" style="color:var(--live)">github.com/Anoi-xyz/verse-trading-mvp</a></p>
+  </section>
+
+</div>
+
+<script>
+  const ROUTER = '0xC532a74256D3Db42D0Bf7a0400fEFDbad7694008';
+  const WETH = '0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9';
+  const TOKEN = '0xdD56d48Af84419F5d77dB4F190ee5BBA50073E77';
+  const SEPOLIA_CHAIN_ID_HEX = '0xaa36a7';
+
+  const ROUTER_ABI = [
+    'function getAmountsOut(uint amountIn, address[] calldata path) external view returns (uint[] memory amounts)',
+    'function swapExactETHForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) external payable returns (uint[] memory amounts)',
+    'function swapExactTokensForETH(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)',
+  ];
+  const ERC20_ABI = [
+    'function balanceOf(address) view returns (uint256)',
+    'function decimals() view returns (uint8)',
+    'function symbol() view returns (string)',
+    'function approve(address,uint256) returns (bool)',
+    'function allowance(address,address) view returns (uint256)',
+  ];
+
+  let provider, signer, userAddress;
+  let mode = 'buy';
+  let tokenDecimals = 18, tokenSymbol = 'TOKEN';
+  let quoteTimer = null;
+
+  function setMode(m) {
+    mode = m;
+    document.getElementById('tabBuy').classList.toggle('active', m === 'buy');
+    document.getElementById('tabSell').classList.toggle('active', m === 'sell');
+    document.getElementById('fromToken').textContent = m === 'buy' ? 'ETH' : tokenSymbol;
+    document.getElementById('toToken').textContent = m === 'buy' ? tokenSymbol : 'ETH';
+    document.getElementById('routeLabel').textContent = m === 'buy' ? `ETH → ${tokenSymbol}` : `${tokenSymbol} → ETH`;
+    const btn = document.getElementById('swapBtn');
+    btn.className = 'swap-btn ' + m;
+    document.getElementById('amountIn').value = '';
+    document.getElementById('amountOut').value = '';
+    updateSwapBtnState();
+  }
+
+  async function connectWallet() {
+    if (!window.ethereum) {
+      alert('No wallet found. Install MetaMask (or another browser wallet) to trade.');
+      return;
+    }
+    try {
+      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+      provider = new ethers.BrowserProvider(window.ethereum);
+      signer = await provider.getSigner();
+      userAddress = accounts[0];
+
+      document.getElementById('connectBtn').style.display = 'none';
+      const chip = document.getElementById('walletChip');
+      chip.style.display = 'inline-flex';
+      document.getElementById('walletAddr').textContent = userAddress.slice(0, 6) + '…' + userAddress.slice(-4);
+
+      await checkNetwork();
+      await loadTokenMeta();
+      await refreshBalances();
+      updateSwapBtnState();
+
+      window.ethereum.on('accountsChanged', () => location.reload());
+      window.ethereum.on('chainChanged', () => location.reload());
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function checkNetwork() {
+    const network = await provider.getNetwork();
+    const onSepolia = network.chainId === 11155111n;
+    document.getElementById('netWarning').style.display = onSepolia ? 'none' : 'flex';
+    return onSepolia;
+  }
+
+  async function switchToSepolia() {
+    try {
+      await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: SEPOLIA_CHAIN_ID_HEX }] });
+      location.reload();
+    } catch (err) {
+      alert('Could not switch network automatically — please switch to Sepolia manually in your wallet.');
+    }
+  }
+
+  async function loadTokenMeta() {
+    const token = new ethers.Contract(TOKEN, ERC20_ABI, provider);
+    tokenDecimals = await token.decimals();
+    tokenSymbol = await token.symbol();
+    document.getElementById('fromToken').textContent = mode === 'buy' ? 'ETH' : tokenSymbol;
+    document.getElementById('toToken').textContent = mode === 'buy' ? tokenSymbol : 'ETH';
+    document.getElementById('routeLabel').textContent = mode === 'buy' ? `ETH → ${tokenSymbol}` : `${tokenSymbol} → ETH`;
+  }
+
+  async function refreshBalances() {
+    const ethBal = await provider.getBalance(userAddress);
+    const token = new ethers.Contract(TOKEN, ERC20_ABI, provider);
+    const tokenBal = await token.balanceOf(userAddress);
+    const ethStr = Number(ethers.formatEther(ethBal)).toFixed(4) + ' ETH';
+    const tokenStr = Number(ethers.formatUnits(tokenBal, tokenDecimals)).toFixed(2) + ' ' + tokenSymbol;
+    document.getElementById('fromBalance').textContent = 'Balance: ' + (mode === 'buy' ? ethStr : tokenStr);
+    document.getElementById('toBalance').textContent = 'Balance: ' + (mode === 'buy' ? tokenStr : ethStr);
+  }
+
+  function updateSwapBtnState() {
+    const btn = document.getElementById('swapBtn');
+    if (!signer) { btn.disabled = true; btn.textContent = 'Connect wallet to trade'; return; }
+    const amt = document.getElementById('amountIn').value;
+    if (!amt || Number(amt) <= 0) { btn.disabled = true; btn.textContent = 'Enter an amount'; return; }
+    btn.disabled = false;
+    btn.textContent = mode === 'buy' ? `Buy ${tokenSymbol}` : `Sell ${tokenSymbol}`;
+  }
+
+  function onAmountChange() {
+    updateSwapBtnState();
+    clearTimeout(quoteTimer);
+    quoteTimer = setTimeout(getQuote, 400);
+  }
+
+  async function getQuote() {
+    const amt = document.getElementById('amountIn').value;
+    if (!amt || Number(amt) <= 0 || !provider) { document.getElementById('amountOut').value = ''; return; }
+    try {
+      const router = new ethers.Contract(ROUTER, ROUTER_ABI, provider);
+      if (mode === 'buy') {
+        const amountIn = ethers.parseEther(amt);
+        const amounts = await router.getAmountsOut(amountIn, [WETH, TOKEN]);
+        document.getElementById('amountOut').value = Number(ethers.formatUnits(amounts[1], tokenDecimals)).toFixed(4);
+      } else {
+        const amountIn = ethers.parseUnits(amt, tokenDecimals);
+        const amounts = await router.getAmountsOut(amountIn, [TOKEN, WETH]);
+        document.getElementById('amountOut').value = Number(ethers.formatEther(amounts[1])).toFixed(6);
+      }
+    } catch (err) {
+      document.getElementById('amountOut').value = '';
+      console.warn('quote failed', err.message);
+    }
+  }
+
+  function showStatus(type, html) {
+    const el = document.getElementById('txStatus');
+    el.className = 'tx-status ' + type;
+    el.innerHTML = html;
+  }
+
+  async function executeSwap() {
+    const amt = document.getElementById('amountIn').value;
+    if (!amt || Number(amt) <= 0) return;
+    const btn = document.getElementById('swapBtn');
+    btn.disabled = true;
+
+    try {
+      const router = new ethers.Contract(ROUTER, ROUTER_ABI, signer);
+      const deadline = Math.floor(Date.now() / 1000) + 600;
+
+      if (mode === 'buy') {
+        const amountIn = ethers.parseEther(amt);
+        const amounts = await router.getAmountsOut(amountIn, [WETH, TOKEN]);
+        const minOut = (amounts[1] * 95n) / 100n;
+        showStatus('pending', 'Confirm the transaction in your wallet…');
+        const tx = await router.swapExactETHForTokens(minOut, [WETH, TOKEN], userAddress, deadline, { value: amountIn });
+        showStatus('pending', `Transaction sent: ${tx.hash}<br>Waiting for confirmation…`);
+        const receipt = await tx.wait();
+        showStatus('success', `Swap confirmed in block ${receipt.blockNumber}<br><a href="https://sepolia.etherscan.io/tx/${receipt.hash}" target="_blank">View on Etherscan →</a>`);
+      } else {
+        const amountIn = ethers.parseUnits(amt, tokenDecimals);
+        const token = new ethers.Contract(TOKEN, ERC20_ABI, signer);
+        const allowance = await token.allowance(userAddress, ROUTER);
+        if (allowance < amountIn) {
+          showStatus('pending', 'Approving token spend — confirm in your wallet…');
+          const approveTx = await token.approve(ROUTER, amountIn);
+          await approveTx.wait();
+        }
+        const amounts = await router.getAmountsOut(amountIn, [TOKEN, WETH]);
+        const minOut = (amounts[1] * 95n) / 100n;
+        showStatus('pending', 'Confirm the swap in your wallet…');
+        const tx = await router.swapExactTokensForETH(amountIn, minOut, [TOKEN, WETH], userAddress, deadline);
+        showStatus('pending', `Transaction sent: ${tx.hash}<br>Waiting for confirmation…`);
+        const receipt = await tx.wait();
+        showStatus('success', `Swap confirmed in block ${receipt.blockNumber}<br><a href="https://sepolia.etherscan.io/tx/${receipt.hash}" target="_blank">View on Etherscan →</a>`);
+      }
+
+      document.getElementById('amountIn').value = '';
+      document.getElementById('amountOut').value = '';
+      await refreshBalances();
+    } catch (err) {
+      console.error(err);
+      showStatus('error', 'Transaction failed: ' + (err.reason || err.message || 'unknown error'));
+    }
+    updateSwapBtnState();
+  }
+
+  const results = [
+    { asset: 'BTC', strategy: 'sma-5-20', inPnl: 58.48, outPnl: -18.85, inTrades: 10, outTrades: 9 },
+    { asset: 'BTC', strategy: 'sma-10-30', inPnl: 57.54, outPnl: -22.91, inTrades: 7, outTrades: 6 },
+    { asset: 'BTC', strategy: 'rsi-14-30-70', inPnl: 16.62, outPnl: -28.11, inTrades: 3, outTrades: 3 },
+    { asset: 'BTC', strategy: 'rsi-21-25-75', inPnl: null, outPnl: -0.44, inTrades: 0, outTrades: 2 },
+    { asset: 'BTC', strategy: 'trend-vol-filter', inPnl: null, outPnl: null, inTrades: 0, outTrades: 0 },
+    { asset: 'ETH', strategy: 'sma-5-20', inPnl: 18.6, outPnl: -34.46, inTrades: 10, outTrades: 11 },
+    { asset: 'ETH', strategy: 'sma-10-30', inPnl: 16.6, outPnl: -23.11, inTrades: 5, outTrades: 8 },
+    { asset: 'ETH', strategy: 'rsi-14-30-70', inPnl: -25.99, outPnl: -26.63, inTrades: 3, outTrades: 4 },
+    { asset: 'ETH', strategy: 'rsi-21-25-75', inPnl: null, outPnl: -13.43, inTrades: 0, outTrades: 1 },
+    { asset: 'ETH', strategy: 'trend-vol-filter', inPnl: 11.36, outPnl: null, inTrades: 2, outTrades: 0 },
+    { asset: 'LINK', strategy: 'sma-5-20', inPnl: 5.13, outPnl: -46.04, inTrades: 11, outTrades: 10 },
+    { asset: 'LINK', strategy: 'sma-10-30', inPnl: 25.5, outPnl: -25.79, inTrades: 7, outTrades: 5 },
+    { asset: 'LINK', strategy: 'rsi-14-30-70', inPnl: -8.97, outPnl: -33.37, inTrades: 3, outTrades: 3 },
+    { asset: 'LINK', strategy: 'rsi-21-25-75', inPnl: 18.04, outPnl: 50.02, inTrades: 1, outTrades: 2 },
+    { asset: 'LINK', strategy: 'trend-vol-filter', inPnl: null, outPnl: null, inTrades: 0, outTrades: 0 },
+    { asset: 'UNI', strategy: 'sma-5-20', inPnl: 0.83, outPnl: -11.7, inTrades: 1, outTrades: 3 },
+    { asset: 'UNI', strategy: 'sma-10-30', inPnl: null, outPnl: -4.57, inTrades: 0, outTrades: 1 },
+    { asset: 'UNI', strategy: 'rsi-14-30-70', inPnl: null, outPnl: null, inTrades: 0, outTrades: 0 },
+    { asset: 'UNI', strategy: 'rsi-21-25-75', inPnl: null, outPnl: null, inTrades: 0, outTrades: 0 },
+    { asset: 'UNI', strategy: 'trend-vol-filter', inPnl: null, outPnl: null, inTrades: 0, outTrades: 0 },
+    { asset: 'AAVE', strategy: 'sma-5-20', inPnl: 60.54, outPnl: -45.95, inTrades: 10, outTrades: 11 },
+    { asset: 'AAVE', strategy: 'sma-10-30', inPnl: 94.1, outPnl: -19.03, inTrades: 6, outTrades: 7 },
+    { asset: 'AAVE', strategy: 'rsi-14-30-70', inPnl: -19.97, outPnl: -7.21, inTrades: 2, outTrades: 5 },
+    { asset: 'AAVE', strategy: 'rsi-21-25-75', inPnl: null, outPnl: -23.32, inTrades: 0, outTrades: 1 },
+    { asset: 'AAVE', strategy: 'trend-vol-filter', inPnl: null, outPnl: null, inTrades: 0, outTrades: 0 },
+  ];
+
+  function verdict(row) {
+    if (row.outTrades < 5 || row.inTrades < 5 || row.outPnl === null) return 'insufficient';
+    return (row.inPnl > 0 && row.outPnl > 0) ? 'pass' : 'fail';
+  }
+  function fmtPct(v) { if (v === null || v === undefined) return '—'; return (v >= 0 ? '+' : '') + v.toFixed(1) + '%'; }
+
+  function renderLedger() {
+    const body = document.getElementById('ledger-body');
+    body.innerHTML = '';
+    results.forEach(row => {
+      const v = verdict(row);
+      const el = document.createElement('div');
+      el.className = 'ledger-row body';
+      el.innerHTML = `
+        <div class="asset-cell">${row.asset}<span class="strategy">${row.strategy}</span></div>
+        <div class="num-cell ${row.inPnl === null ? 'neutral' : (row.inPnl >= 0 ? 'up' : 'down')}">${fmtPct(row.inPnl)}<span class="trades">${row.inTrades}t</span></div>
+        <div class="num-cell ${row.outPnl === null ? 'neutral' : (row.outPnl >= 0 ? 'up' : 'down')}">${fmtPct(row.outPnl)}<span class="trades">${row.outTrades}t</span></div>
+        <div class="num-cell neutral">${row.inTrades + row.outTrades}</div>
+        <div>${ v === 'pass' ? '<span class="stamp pass">&#10003; PASS</span>' : v === 'fail' ? '<span class="stamp fail">&#10005; REJECTED</span>' : '<span class="stamp insufficient">TOO FEW TRADES</span>' }</div>
+      `;
+      body.appendChild(el);
+    });
+    const passed = results.filter(r => verdict(r) === 'pass').length;
+    document.getElementById('ledger-summary').innerHTML = `<b>${passed}</b> of <b>${results.length}</b> combos survived both halves of testing.`;
+  }
+
+  renderLedger();
+</script>
+</body>
+</html>
