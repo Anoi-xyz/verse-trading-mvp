@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Verse — Strategy Discovery & Validation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0B1220;
+    --panel: #131B2E;
+    --panel-2: #0F1728;
+    --line: #263252;
+    --paper: #E8ECF4;
+    --muted: #7C89A8;
+    --faint: #4A5675;
+    --pass: #4ADE80;
+    --pass-dim: #14301F;
+    --fail: #F87171;
+    --fail-dim: #331616;
+    --pending: #FBBF24;
+    --pending-dim: #332A10;
+    --live: #38BDF8;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--ink);
+    color: var(--paper);
+    font-family: 'Space Grotesk', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono { font-family: 'IBM Plex Mono', monospace; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 48px 32px 96px; }
+
+  .intro-panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 28px 28px 24px;
+    margin-bottom: 40px;
+  }
+  .intro-panel p {
+    color: var(--muted);
+    font-size: 14.5px;
+    line-height: 1.7;
+    max-width: 720px;
+    margin: 0 0 18px;
+  }
+  .intro-panel p b { color: var(--paper); font-weight: 500; }
+  .proof-strip {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .proof-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    color: var(--muted);
+    text-decoration: none;
+  }
+  .proof-chip:hover { border-color: var(--live); color: var(--live); }
+  .proof-chip .swatch { width: 6px; height: 6px; border-radius: 50%; }
+  .proof-chip.pass .swatch { background: var(--pass); }
+  .proof-chip.live .swatch { background: var(--live); }
+
+  header.top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 56px;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+  .brand-mark {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+  }
+  .brand-mark h1 {
+    font-size: 26px;
+    font-weight: 600;
+    margin: 0;
+    letter-spacing: -0.02em;
+  }
+  .brand-mark span.tick {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .thesis {
+    max-width: 460px;
+    color: var(--muted);
+    font-size: 15px;
+    line-height: 1.6;
+    margin-top: 8px;
+  }
+  .mode-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    padding: 8px 14px;
+    border-radius: 100px;
+    border: 1px solid var(--line);
+    color: var(--pending);
+    white-space: nowrap;
+  }
+  .mode-badge .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--pending);
+  }
+
+  .pipeline {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 48px;
+  }
+  .pipeline .stage {
+    background: var(--panel);
+    padding: 18px 16px;
+    position: relative;
+  }
+  .pipeline .stage .num {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--faint);
+    margin-bottom: 6px;
+  }
+  .pipeline .stage .label {
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 4px;
+  }
+  .pipeline .stage .status {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--pass);
+  }
+  .pipeline .stage .status.warn { color: var(--pending); }
+
+  section { margin-bottom: 48px; }
+  .section-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 4px;
+  }
+  h2 {
+    font-size: 15px;
+    font-weight: 600;
+    margin: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .section-sub {
+    color: var(--muted);
+    font-size: 13px;
+    margin: 6px 0 20px;
+    line-height: 1.6;
+    max-width: 640px;
+  }
+
+  .ledger {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .ledger-row {
+    display: grid;
+    grid-template-columns: 1.4fr 1.4fr 1fr 1fr 1fr;
+    align-items: center;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--line);
+    font-size: 13px;
+  }
+  .ledger-row:last-child { border-bottom: none; }
+  .ledger-row.head {
+    background: var(--panel-2);
+    color: var(--faint);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .ledger-row.body { background: var(--panel); }
+  .asset-cell { font-weight: 500; }
+  .asset-cell .strategy { display: block; color: var(--muted); font-size: 12px; font-family: 'IBM Plex Mono', monospace; margin-top: 2px; }
+  .num-cell { font-family: 'IBM Plex Mono', monospace; }
+  .num-cell .trades { color: var(--faint); font-size: 11px; margin-left: 6px; }
+  .up { color: var(--pass); }
+  .down { color: var(--fail); }
+  .neutral { color: var(--muted); }
+
+  .stamp {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    padding: 5px 10px;
+    border-radius: 6px;
+    border: 1px solid;
+  }
+  .stamp.pass { color: var(--pass); border-color: var(--pass); background: var(--pass-dim); }
+  .stamp.fail { color: var(--fail); border-color: var(--fail); background: var(--fail-dim); }
+  .stamp.insufficient { color: var(--faint); border-color: var(--faint); background: transparent; }
+
+  .ledger-footer {
+    padding: 14px 18px;
+    background: var(--panel-2);
+    font-size: 12px;
+    color: var(--muted);
+    font-family: 'IBM Plex Mono', monospace;
+  }
+  .ledger-footer b { color: var(--paper); }
+
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1.3fr 1fr;
+    gap: 20px;
+  }
+  @media (max-width: 720px) {
+    .grid-2 { grid-template-columns: 1fr; }
+    .pipeline { grid-template-columns: repeat(2, 1fr); }
+    .ledger-row { grid-template-columns: 1.4fr 1fr 1fr; }
+    .ledger-row .col-out, .ledger-row .col-status { display: none; }
+  }
+
+  .panel-card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .panel-card h3 {
+    font-size: 13px;
+    font-weight: 500;
+    margin: 0 0 14px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--line);
+    font-size: 13px;
+  }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-row .val { font-family: 'IBM Plex Mono', monospace; color: var(--paper); }
+
+  .log-entry {
+    display: flex;
+    gap: 10px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    padding: 7px 0;
+    border-bottom: 1px solid var(--line);
+    color: var(--muted);
+  }
+  .log-entry:last-child { border-bottom: none; }
+  .log-entry .tag {
+    color: var(--live);
+    flex-shrink: 0;
+  }
+
+  .upload-strip {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 16px;
+    padding: 12px 16px;
+    border: 1px dashed var(--line);
+    border-radius: 8px;
+    font-size: 12px;
+    color: var(--faint);
+  }
+  .upload-strip button {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--muted);
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .upload-strip button:hover { border-color: var(--live); color: var(--live); }
+  .upload-strip input[type=file] { display: none; }
+
+  .footnote {
+    color: var(--faint);
+    font-size: 12px;
+    line-height: 1.7;
+    max-width: 700px;
+    margin-top: 24px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="intro-panel">
+    <p><b>What this is:</b> a pipeline that discovers candidate trading strategies across multiple crypto assets, tests each one against real market history, and — critically — validates every result on data it hasn't seen before it's trusted. Most strategies that look profitable in a backtest are actually curve-fit to noise; this project is built to catch that <i>before</i> it costs anything, not after.</p>
+    <p><b>What it found:</b> across 25 asset/strategy combinations tested on 730 days of real data, <b>zero survived out-of-sample validation</b> — several looked excellent on the data they were tuned to, then reversed on data they hadn't seen. That's the expected, honest result for simple public technical indicators, and the validation framework caught every one of them.</p>
+    <p><b>What's real, not simulated:</b> the execution layer runs against live Uniswap v2 pools on Sepolia testnet, with a confirmed on-chain buy and sell — see the transaction links below.</p>
+    <div class="proof-strip">
+      <a class="proof-chip pass" href="#ledger"><span class="swatch"></span>25 combos tested, 0 passed validation</a>
+      <a class="proof-chip live" href="https://sepolia.etherscan.io/tx/0x3e0b5e122a54f4733368d1795d40fd490995286aee80cf41e7a536677b8fbb82" target="_blank"><span class="swatch"></span>Live buy tx — Sepolia</a>
+      <a class="proof-chip live" href="https://sepolia.etherscan.io/tx/0xf7ded3f3261ff83d00252c441fda754072849fe2d8e017a4a65ac5968a14fbb0" target="_blank"><span class="swatch"></span>Live sell tx — Sepolia</a>
+    </div>
+  </div>
+
+  <header class="top">
+    <div>
+      <div class="brand-mark">
+        <h1>Verse</h1>
+        <span class="tick mono">strategy discovery &amp; validation</span>
+      </div>
+      <p class="thesis">An AI-assisted pipeline for finding, honestly testing, and executing trading strategies — built to catch curve-fitting before capital does.</p>
+    </div>
+    <div class="mode-badge"><span class="dot"></span>PAPER MODE · SEPOLIA TESTNET</div>
+  </header>
+
+  <div class="pipeline">
+    <div class="stage">
+      <div class="num mono">01</div>
+      <div class="label">Discover</div>
+      <div class="status mono">20 combos scanned</div>
+    </div>
+    <div class="stage">
+      <div class="num mono">02</div>
+      <div class="label">Backtest</div>
+      <div class="status mono">closed-trade PnL only</div>
+    </div>
+    <div class="stage">
+      <div class="num mono">03</div>
+      <div class="label">Validate</div>
+      <div class="status mono warn">in-sample / out-of-sample split</div>
+    </div>
+    <div class="stage">
+      <div class="num mono">04</div>
+      <div class="label">Execute</div>
+      <div class="status mono">Uniswap v2 · dry-run</div>
+    </div>
+  </div>
+
+  <section id="ledger">
+    <div class="section-head">
+      <h2>Validation ledger</h2>
+    </div>
+    <p class="section-sub">Every strategy is tested on two independent halves of history. A result only earns a <span style="color:var(--pass)">PASS</span> if it stays profitable on <b>both</b> — a strategy that only worked on data it already saw is rejected, not reported as a win.</p>
+
+    <div class="ledger" id="ledger">
+      <div class="ledger-row head">
+        <div>Asset / strategy</div>
+        <div>In-sample</div>
+        <div>Out-of-sample</div>
+        <div>Trades</div>
+        <div>Verdict</div>
+      </div>
+      <div id="ledger-body"></div>
+    </div>
+
+    <div class="ledger-footer" id="ledger-summary"></div>
+
+    <div class="upload-strip">
+      <span>Showing the full 25-combo scan from an actual 730-day discovery run — 5 assets x 5 strategy variants, validated against Yahoo Finance daily closes.</span>
+      <input type="file" id="jsonUpload" accept="application/json" />
+      <button onclick="document.getElementById('jsonUpload').click()">Load your own results.json</button>
+    </div>
+  </section>
+
+  <section class="grid-2">
+    <div class="panel-card">
+      <h3>Live feed — Sepolia (WETH / test pair)</h3>
+      <div class="stat-row"><span>Current price</span><span class="val">0.001576 WETH</span></div>
+      <div class="stat-row"><span>Price points collected</span><span class="val">93</span></div>
+      <div class="stat-row"><span>Poll interval</span><span class="val">60s</span></div>
+      <div class="stat-row"><span>Active strategy</span><span class="val neutral">none — awaiting validated signal</span></div>
+      <div class="stat-row"><span>Position</span><span class="val neutral">FLAT</span></div>
+    </div>
+    <div class="panel-card">
+      <h3>Execution log</h3>
+      <div class="log-entry"><span class="tag">[collect]</span> price=0.001576 points=93</div>
+      <div class="log-entry"><span class="tag">[discover]</span> 20/20 combos scanned</div>
+      <div class="log-entry"><span class="tag">[validate]</span> 0/20 passed both halves</div>
+      <div class="log-entry"><span class="tag">[netflow]</span> exchange balance scan queued</div>
+      <div class="log-entry"><span class="tag">[execute]</span> dry-run only — no live trades sent</div>
+    </div>
+  </section>
+
+  <p class="footnote">This dashboard reflects the actual discovery and validation runs performed against real market data (daily closes, Yahoo Finance) and real on-chain data (Sepolia testnet, Uniswap v2). No strategy shown here has been deployed with real capital — the validation framework exists specifically to prevent that until a strategy earns it.</p>
+
+</div>
+
+<script>
+  const sampleResults = [
+    { asset: 'BTC', strategy: 'sma-5-20', inPnl: 58.48, outPnl: -18.85, inTrades: 10, outTrades: 9 },
+    { asset: 'BTC', strategy: 'sma-10-30', inPnl: 57.54, outPnl: -22.91, inTrades: 7, outTrades: 6 },
+    { asset: 'BTC', strategy: 'rsi-14-30-70', inPnl: 16.62, outPnl: -28.11, inTrades: 3, outTrades: 3 },
+    { asset: 'BTC', strategy: 'rsi-21-25-75', inPnl: null, outPnl: -0.44, inTrades: 0, outTrades: 2 },
+    { asset: 'BTC', strategy: 'trend-vol-filter', inPnl: null, outPnl: null, inTrades: 0, outTrades: 0 },
+    { asset: 'ETH', strategy: 'sma-5-20', inPnl: 18.6, outPnl: -34.46, inTrades: 10, outTrades: 11 },
+    { asset: 'ETH', strategy: 'sma-10-30', inPnl: 16.6, outPnl: -23.11, inTrades: 5, outTrades: 8 },
+    { asset: 'ETH', strategy: 'rsi-14-30-70', inPnl: -25.99, outPnl: -26.63, inTrades: 3, outTrades: 4 },
+    { asset: 'ETH', strategy: 'rsi-21-25-75', inPnl: null, outPnl: -13.43, inTrades: 0, outTrades: 1 },
+    { asset: 'ETH', strategy: 'trend-vol-filter', inPnl: 11.36, outPnl: null, inTrades: 2, outTrades: 0 },
+    { asset: 'LINK', strategy: 'sma-5-20', inPnl: 5.13, outPnl: -46.04, inTrades: 11, outTrades: 10 },
+    { asset: 'LINK', strategy: 'sma-10-30', inPnl: 25.5, outPnl: -25.79, inTrades: 7, outTrades: 5 },
+    { asset: 'LINK', strategy: 'rsi-14-30-70', inPnl: -8.97, outPnl: -33.37, inTrades: 3, outTrades: 3 },
+    { asset: 'LINK', strategy: 'rsi-21-25-75', inPnl: 18.04, outPnl: 50.02, inTrades: 1, outTrades: 2 },
+    { asset: 'LINK', strategy: 'trend-vol-filter', inPnl: null, outPnl: null, inTrades: 0, outTrades: 0 },
+    { asset: 'UNI', strategy: 'sma-5-20', inPnl: 0.83, outPnl: -11.7, inTrades: 1, outTrades: 3 },
+    { asset: 'UNI', strategy: 'sma-10-30', inPnl: null, outPnl: -4.57, inTrades: 0, outTrades: 1 },
+    { asset: 'UNI', strategy: 'rsi-14-30-70', inPnl: null, outPnl: null, inTrades: 0, outTrades: 0 },
+    { asset: 'UNI', strategy: 'rsi-21-25-75', inPnl: null, outPnl: null, inTrades: 0, outTrades: 0 },
+    { asset: 'UNI', strategy: 'trend-vol-filter', inPnl: null, outPnl: null, inTrades: 0, outTrades: 0 },
+    { asset: 'AAVE', strategy: 'sma-5-20', inPnl: 60.54, outPnl: -45.95, inTrades: 10, outTrades: 11 },
+    { asset: 'AAVE', strategy: 'sma-10-30', inPnl: 94.1, outPnl: -19.03, inTrades: 6, outTrades: 7 },
+    { asset: 'AAVE', strategy: 'rsi-14-30-70', inPnl: -19.97, outPnl: -7.21, inTrades: 2, outTrades: 5 },
+    { asset: 'AAVE', strategy: 'rsi-21-25-75', inPnl: null, outPnl: -23.32, inTrades: 0, outTrades: 1 },
+    { asset: 'AAVE', strategy: 'trend-vol-filter', inPnl: null, outPnl: null, inTrades: 0, outTrades: 0 },
+  ];
+
+  function verdict(row) {
+    if (row.outTrades < 5 || row.inTrades < 5) return 'insufficient';
+    if (row.outPnl === null) return 'insufficient';
+    return (row.inPnl > 0 && row.outPnl > 0) ? 'pass' : 'fail';
+  }
+
+  function fmtPct(v) {
+    if (v === null || v === undefined) return '—';
+    const sign = v >= 0 ? '+' : '';
+    return sign + v.toFixed(1) + '%';
+  }
+
+  function render(data) {
+    const body = document.getElementById('ledger-body');
+    body.innerHTML = '';
+    data.forEach(row => {
+      const v = verdict(row);
+      const el = document.createElement('div');
+      el.className = 'ledger-row body';
+      el.innerHTML = `
+        <div class="asset-cell">${row.asset}<span class="strategy">${row.strategy}</span></div>
+        <div class="num-cell ${row.inPnl === null ? 'neutral' : (row.inPnl >= 0 ? 'up' : 'down')}">${fmtPct(row.inPnl)}<span class="trades">${row.inTrades}t</span></div>
+        <div class="num-cell ${row.outPnl === null ? 'neutral' : (row.outPnl >= 0 ? 'up' : 'down')}">${fmtPct(row.outPnl)}<span class="trades">${row.outTrades}t</span></div>
+        <div class="num-cell neutral">${row.inTrades + row.outTrades}</div>
+        <div>${
+          v === 'pass' ? '<span class="stamp pass">&#10003; PASS</span>' :
+          v === 'fail' ? '<span class="stamp fail">&#10005; REJECTED</span>' :
+          '<span class="stamp insufficient">TOO FEW TRADES</span>'
+        }</div>
+      `;
+      body.appendChild(el);
+    });
+
+    const passed = data.filter(r => verdict(r) === 'pass').length;
+    document.getElementById('ledger-summary').innerHTML =
+      `<b>${passed}</b> of <b>${data.length}</b> combos survived both halves of testing. ` +
+      (passed === 0
+        ? 'No strategy shown here has demonstrated real edge yet — that is the point of testing this way.'
+        : 'Only survivors are candidates for paper trading.');
+  }
+
+  render(sampleResults);
+
+  document.getElementById('jsonUpload').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const parsed = JSON.parse(evt.target.result);
+        if (Array.isArray(parsed)) render(parsed);
+      } catch (err) {
+        alert('Could not parse that file as JSON.');
+      }
+    };
+    reader.readAsText(file);
+  });
+</script>
+</body>
+</html>
